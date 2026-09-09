@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import sys
 from typing import Any, List, Optional, Tuple
 
@@ -27,6 +28,7 @@ import helpers.hserver as hserver
 import helpers.hsystem as hsystem
 import helpers.htraceback as htraceb
 import helpers.lib_tasks.lib_tasks_docker as hltltado
+import helpers.lib_tasks.lib_tasks_find as hltltafi
 import helpers.lib_tasks.lib_tasks_lint as hltltali
 import helpers.lib_tasks.lib_tasks_utils as hltltaut
 import helpers.repo_config_utils as hrecouti
@@ -69,6 +71,67 @@ _NUM_TIMEOUT_TEST_RERUNS = {
     "slow_tests": 1,
     "superslow_tests": 1,
 }
+
+
+def _build_pytest_run_class_command(
+    class_name: str,
+    dir_name: str = ".",
+    method_name: str = "",
+    run_file: bool = False,
+) -> str:
+    """Build a pytest command for one resolved test class."""
+    hdbg.dassert_ne(class_name, "", "You need to specify a class name")
+    hdbg.dassert(
+        not (run_file and method_name),
+        "`run_file` and `method_name` are mutually exclusive",
+    )
+    file_names = hltltafi._find_test_files(dir_name)
+    targets = hltltafi._find_test_class(class_name, file_names, exact_match=True)
+    hdbg.dassert_eq(
+        len(targets),
+        1,
+        "Expected exactly one test class for '%s', found %s",
+        class_name,
+        targets,
+    )
+    target = targets[0]
+    if run_file:
+        target = target.split("::", maxsplit=1)[0]
+    elif method_name:
+        target += f"::{method_name}"
+    cmd = f"pytest {shlex.quote(target)}"
+    return cmd
+
+
+@task
+def pytest_run_class(  # type: ignore
+    ctx,
+    class_name,
+    dir_name=".",
+    method_name="",
+    run_file=False,
+    preview=False,
+):
+    """
+    Run a test class without asking pytest to collect the whole repository.
+
+    :param class_name: exact test class name to run
+    :param dir_name: directory from which to search for test files
+    :param method_name: optional method to run inside the resolved class
+    :param run_file: run the containing test file instead of only the class
+    :param preview: print the pytest command without executing it
+    """
+    hltltaut.report_task()
+    cmd = _build_pytest_run_class_command(
+        class_name,
+        dir_name=dir_name,
+        method_name=method_name,
+        run_file=run_file,
+    )
+    if preview:
+        print(cmd)
+        return None
+    return hltltaut.run(ctx, cmd)
 
 
 @task

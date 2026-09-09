@@ -45,6 +45,108 @@ def _purify_pytest_command(text: str) -> str:
 
 
 # #############################################################################
+# Test_build_pytest_run_class_command1
+# #############################################################################
+
+
+class Test_build_pytest_run_class_command1(hunitest.TestCase):
+    @staticmethod
+    def _patch_resolver(targets: list[str]):
+        return (
+            umock.patch.object(
+                hltltapy.hltltafi,
+                "_find_test_files",
+                return_value=["pkg/test/test_sample.py"],
+            ),
+            umock.patch.object(
+                hltltapy.hltltafi,
+                "_find_test_class",
+                return_value=targets,
+            ),
+        )
+
+    def test_class1(self) -> None:
+        patches = self._patch_resolver(["pkg/test/test_sample.py::TestSample"])
+        with patches[0] as find_files, patches[1] as find_class:
+            actual = hltltapy._build_pytest_run_class_command(
+                "TestSample", dir_name="pkg"
+            )
+        self.assert_equal(actual, "pytest pkg/test/test_sample.py::TestSample")
+        find_files.assert_called_once_with("pkg")
+        find_class.assert_called_once_with(
+            "TestSample",
+            ["pkg/test/test_sample.py"],
+            exact_match=True,
+        )
+
+    def test_method1(self) -> None:
+        patches = self._patch_resolver(["pkg/test/test_sample.py::TestSample"])
+        with patches[0], patches[1]:
+            actual = hltltapy._build_pytest_run_class_command(
+                "TestSample", method_name="test_value"
+            )
+        self.assert_equal(
+            actual,
+            "pytest pkg/test/test_sample.py::TestSample::test_value",
+        )
+
+    def test_run_file1(self) -> None:
+        patches = self._patch_resolver(["pkg/test/test_sample.py::TestSample"])
+        with patches[0], patches[1]:
+            actual = hltltapy._build_pytest_run_class_command(
+                "TestSample", run_file=True
+            )
+        self.assert_equal(actual, "pytest pkg/test/test_sample.py")
+
+    def test_missing1(self) -> None:
+        patches = self._patch_resolver([])
+        with patches[0], patches[1], self.assertRaises(AssertionError):
+            hltltapy._build_pytest_run_class_command("TestMissing")
+
+    def test_ambiguous1(self) -> None:
+        patches = self._patch_resolver(
+            [
+                "a/test/test_one.py::TestSample",
+                "b/test/test_two.py::TestSample",
+            ]
+        )
+        with patches[0], patches[1], self.assertRaises(AssertionError):
+            hltltapy._build_pytest_run_class_command("TestSample")
+
+    def test_preview1(self) -> None:
+        ctx = umock.MagicMock()
+        with (
+            umock.patch.object(
+                hltltapy,
+                "_build_pytest_run_class_command",
+                return_value="pytest path::TestSample",
+            ),
+            umock.patch.object(hltltapy.hltltaut, "run") as run,
+            umock.patch("builtins.print") as print_,
+        ):
+            actual = hltltapy.pytest_run_class.body(
+                ctx, "TestSample", preview=True
+            )
+        self.assertIsNone(actual)
+        print_.assert_called_once_with("pytest path::TestSample")
+        run.assert_not_called()
+
+    def test_execute1(self) -> None:
+        ctx = umock.MagicMock()
+        with (
+            umock.patch.object(
+                hltltapy,
+                "_build_pytest_run_class_command",
+                return_value="pytest path::TestSample",
+            ),
+            umock.patch.object(hltltapy.hltltaut, "run", return_value=7) as run,
+        ):
+            actual = hltltapy.pytest_run_class.body(ctx, "TestSample")
+        self.assert_equal(actual, 7)
+        run.assert_called_once_with(ctx, "pytest path::TestSample")
+
+
+# #############################################################################
 # Test_build_run_command_line1
 # #############################################################################
 
